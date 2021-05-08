@@ -1,33 +1,13 @@
-#include <SFML/Graphics.hpp>
-#include "iostream"
+
+
+
+#include "Gravity.h"
+#include <iostream>
 #include <chrono>
 #include <thread>
 
-using std::vector;
-
-const int POINT_COUNT = 2000;
-const float MAX_MASS = 100;
-const float MAX_INITIAL_MASS = 2;
-const float MIN_MASS = 1;
-
-const float DIST_TO_COLLAPSE = 0.5;
-
-const float MAX_RADIUS = 20;
-
-const float G = 1;
-
 const float width = 1800;
 const float height = 1000;
-struct Vector {
-    float x, y;
-};
-
-struct Point {
-    float x, y, mass;
-    struct Vector acceleration;
-
-};
-
 
 float radius(float mass) {
     float r = (mass / MAX_MASS) * MAX_RADIUS;
@@ -41,72 +21,18 @@ float dist(struct Vector pnt) {
     return dist;
 }
 
-
 //f = G m1*m2 / r^2
-void update(vector<Point> &points) {
+void update(vector<Point> &points, long timedelta) {
     // calculate accelerations
     for (int i = 0; i < points.size(); i++) {
         struct Point &thisPnt = points[i];
-        for (int j = 0; j < points.size(); j++) {
-            // ignore self
-            if (i == j) continue;
-
+        for (int j = i + 1; j < points.size(); j++) {
+            // ignore self;
             struct Point &otherPnt = points[j];
 
 
-            // if bad switch
-            float xDiff = otherPnt.x - thisPnt.x;
-            float yDiff = otherPnt.y - thisPnt.y;
 
-
-            float distSq = xDiff * xDiff + yDiff * yDiff;
-            distSq = distSq < DIST_TO_COLLAPSE ? DIST_TO_COLLAPSE : distSq;
-            float dist = sqrt(distSq);
-
-
-            float force = G * (thisPnt.mass * otherPnt.mass) / distSq;
-
-            float forceX = (xDiff / dist) * force;
-            float forceY = (yDiff / dist) * force;
-
-            thisPnt.acceleration.x += forceX / thisPnt.mass;
-            thisPnt.acceleration.y += forceY / thisPnt.mass;
-
-        }
-    }
-
-    for (auto &thisPnt : points) {
-        float accLen = dist(thisPnt.acceleration);
-
-        float timePassed = 1000.0 / 60;
-
-        thisPnt.x += thisPnt.acceleration.x * accLen / timePassed;
-        thisPnt.y += thisPnt.acceleration.y * accLen / timePassed;
-
-        if (thisPnt.x > width) {
-            thisPnt.x = fmod(thisPnt.x, width);
-        }
-        if (thisPnt.x < 0) {
-            thisPnt.x = width - fmod(-thisPnt.x, width);
-        }
-
-        if (thisPnt.y > height) {
-            thisPnt.y = fmod(thisPnt.y, height);
-        }
-        if (thisPnt.y < 0) {
-            thisPnt.y = height - fmod(-thisPnt.y, height);
-        }
-    }
-
-    for (int i = 0; i < points.size(); i++) {
-        // check collision
-        struct Point &thisPnt = points[i];
-
-        if (thisPnt.mass == 0) continue;
-        for (int j = 0; j < points.size(); j++) {
-            struct Point &otherPnt = points[j];
-
-            if (i == j || otherPnt.mass == 0) continue;
+            if (otherPnt.mass == 0) continue;
 
 
             float d = dist(Vector{thisPnt.x - otherPnt.x, thisPnt.y - otherPnt.y});
@@ -126,11 +52,29 @@ void update(vector<Point> &points) {
                     otherPnt.acceleration.x += thisPnt.acceleration.x * thisPnt.mass / otherPnt.mass;
                     otherPnt.acceleration.y += thisPnt.acceleration.y * thisPnt.mass / otherPnt.mass;
                     thisPnt.mass = 0;
+                    continue;
                 }
             }
+
+            // if bad switch
+            float xDiff = otherPnt.x - thisPnt.x;
+            float yDiff = otherPnt.y - thisPnt.y;
+
+
+            float distSq = xDiff * xDiff + yDiff * yDiff;
+            distSq = distSq < DIST_TO_COLLAPSE ? DIST_TO_COLLAPSE : distSq;
+            float dist = sqrt(distSq);
+
+
+            float force = G * (thisPnt.mass * otherPnt.mass) / distSq;
+
+            float forceX = (xDiff / dist) * force;
+            float forceY = (yDiff / dist) * force;
+
+            thisPnt.acceleration.x += forceX / thisPnt.mass;
+            thisPnt.acceleration.y += forceY / thisPnt.mass;
         }
     }
-
     for (int i = 0; i < points.size(); i++) {
         struct Point &thisPnt = points[i];
         if (thisPnt.mass == 0) {
@@ -138,17 +82,44 @@ void update(vector<Point> &points) {
             points.erase(points.begin() + i);
         }
     }
+
+    for (auto &thisPnt : points) {
+        float accLen = dist(thisPnt.acceleration);
+        thisPnt.x += thisPnt.acceleration.x * accLen / timedelta;
+        thisPnt.y += thisPnt.acceleration.y * accLen / timedelta;
+
+        if (thisPnt.x > width) {
+            thisPnt.x = width - fmod(thisPnt.x, width);
+            thisPnt.acceleration.x *= -0.9;
+
+        }
+        if (thisPnt.x < 0) {
+            thisPnt.x = fmod(-thisPnt.x, width);
+            thisPnt.acceleration.x *= -0.9;
+        }
+
+        if (thisPnt.y > height) {
+            thisPnt.y = height - fmod(thisPnt.y, height);
+            thisPnt.acceleration.y *= -0.9;
+        }
+        if (thisPnt.y < 0) {
+            thisPnt.y = fmod(-thisPnt.y, height);
+            thisPnt.acceleration.y *= -0.9;
+        }
+    }
+
+
 }
 
 
-void setColor(sf::Shape *shape, float mass) {
+void setColor(sf::Shape *shape, Point p) {
+    float red = max(dist(p.acceleration) / 15.0, 1);
+    float green = max(p.mass / MAX_MASS, 1);
+    float blue = (red + green / 2);
 
-    if (mass > MAX_MASS / 2) {
-        shape->setFillColor(sf::Color::Red);
-    } else {
-        shape->setFillColor(sf::Color::Green);
-    }
-
+    float maxColorSat = 150;
+    sf::Color c = sf::Color(red * maxColorSat, green * maxColorSat, blue * maxColorSat);
+    shape->setFillColor(c);
 }
 
 void draw(sf::RenderWindow *window, vector<Point> &points) {
@@ -156,7 +127,7 @@ void draw(sf::RenderWindow *window, vector<Point> &points) {
         float r = radius(point.mass);
         sf::CircleShape shape(r);
         shape.setPosition(point.x, point.y);
-        setColor(&shape, point.mass);
+        setColor(&shape, point);
         window->draw(shape);
     }
 }
@@ -164,32 +135,46 @@ void draw(sf::RenderWindow *window, vector<Point> &points) {
 void randomPoints(vector<Point> &points, int n) {
 
     for (int i = 0; i < n; i++) {
-        struct Vector vec = {
-                static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 50)),
-                static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 50))
+        struct Vector baseAcceleration = {
+                rfloat(5),
+                rfloat(5)
         };
         struct Point point = {
-                static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / width)),
-                static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / height)),
-                MIN_MASS +
-                static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / (MAX_INITIAL_MASS - MIN_MASS))),
-                vec
+                rfloat(width),
+                rfloat(height),
+                MIN_MASS + rfloat(MIN_MASS, MAX_INITIAL_MASS),
+                baseAcceleration
 
         };
         points.push_back(point);
-//        points[i] = point;
+    }
+}
+
+
+[[noreturn]] void update_thread(vector<Point> &points) {
+    sf::Clock clock;
+    for (;;) {
+        sf::Time elapsed1 = clock.getElapsedTime();
+        update(points, 5.0);
+        clock.restart();
+        std::this_thread::sleep_for(100ms);
     }
 }
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(width, height), "SFML works!");
+    sf::RenderWindow window(sf::VideoMode(width, height), "SFML works!", sf::Style::Resize);
 
     std::vector<Point> points;
+
 
     window.setSize(sf::Vector2u(1920, 1080));
     window.setFramerateLimit(60);
     randomPoints(points, POINT_COUNT);
     sf::Clock deltaClock;
+
+
+    thread t1(update_thread, std::ref(points));
+    t1.detach();
 
     while (window.isOpen()) {
         sf::Event event;
@@ -199,7 +184,6 @@ int main() {
         }
 
         window.clear();
-        update(points);
         draw(&window, points);
         window.display();
     }

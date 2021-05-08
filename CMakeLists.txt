@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 include_directories(/usr/local/include)
 
-set(SOURCE_FILES main.cpp)
+set(SOURCE_FILES main.cpp physics.cpp Gravity.h util.cpp)
 add_executable(gravity ${SOURCE_FILES})
 
 
